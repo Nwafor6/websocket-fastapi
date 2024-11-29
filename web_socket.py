@@ -13,6 +13,7 @@ class ConnectionManager:
         """
         await websocket.accept()
         self.active_connections[client_id] = websocket
+
         await websocket.send_text(f"List of users: {self.clients}")
         self.clients.append(client_id)
 

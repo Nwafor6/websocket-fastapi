@@ -2,52 +2,100 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>WebSocket Chat</title>
+    <title>Chat Connect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+            background-color: #f4f4f4;
         }
-        #chat-messages {
-            height: 300px;
-            border: 1px solid #ccc;
-            overflow-y: scroll;
-            margin-bottom: 10px;
-            padding: 10px;
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
         }
-        #user-list {
-            margin-bottom: 10px;
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
         }
     </style>
 </head>
-<body>
-    <div id="chat-container">
-        <h2>WebSocket Chat</h2>
-        
-        <div id="user-list">
-            <label for="recipient">Select Recipient:</label>
-            <select id="recipient">
-                <!-- <option value="xx">xxxx</option> -->
-            </select>
+<body class="bg-gray-100">
+    <div id="app" class="min-h-screen flex">
+        <!-- Users List Sidebar -->
+        <div id="users-sidebar" class="w-1/4 bg-white shadow-lg border-r border-gray-200 p-4">
+            <div class="flex items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mr-auto">Online Users</h2>
+                <span id="online-count" class="bg-green-500 text-white px-2 rounded-full text-sm">0</span>
+            </div>
+            <div id="users-list" class="space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
+                <!-- Users will be dynamically populated here -->
+            </div>
         </div>
 
-        <div id="chat-messages"></div>
+        <!-- Chat Area -->
+        <div id="chat-area" class="w-3/4 flex flex-col bg-gray-50">
+            <div id="chat-header" class="bg-white shadow-sm p-4 flex items-center border-b">
+                <h3 id="chat-title" class="text-xl font-semibold text-gray-700">Select a User to Chat</h3>
+            </div>
 
-        <input type="text" id="message-input" placeholder="Type your message">
-        <button id="send-personal-btn">Send Personal Message</button>
-        <button id="send-broadcast-btn">Send Broadcast</button>
+            <div id="messages-container" class="flex-grow p-4 overflow-y-auto custom-scrollbar">
+                <div id="messages" class="space-y-3">
+                    <!-- Messages will be dynamically populated here -->
+
+                </div>
+            </div>
+
+            <div id="message-input-area" class="bg-white p-4 border-t flex items-center" style="display: none;">
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    placeholder="Type your message..." 
+                    class="flex-grow p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button 
+                    id="send-message" 
+                    class="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 transition"
+                >
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
-        const clientId = `user_${Math.random().toString(36).substr(2, 9)}`;
-        const socket = new WebSocket(`ws://localhost:8000/ws`);
+
+        // get the user info from the cookies
+        function getCookie(name) {
+            const cookies = document.cookie.split('; ');
+            for (let cookie of cookies) {
+                const [key, value] = cookie.split('=');
+                if (key === name) {
+                    return decodeURIComponent(value);
+                }
+            }
+            return null; // Return null if the cookie is not found
+        }
+
+        // Example usage:
+        const user_id = getCookie('user_id');
+        console.log(user_id); // Output: "JohnDoe" (if the cookie exists)
+
+
+
+        const currentUserId = `user_${Math.floor(Math.random() * 1000000)}`;
+        const socket = new WebSocket(`ws://localhost:8000/ws/${user_id}`);
+        
+        const usersList = document.getElementById('users-list');
+        const onlineCount = document.getElementById('online-count');
+        const chatTitle = document.getElementById('chat-title');
+        const messagesContainer = document.getElementById('messages');
         const messageInput = document.getElementById('message-input');
-        const chatMessages = document.getElementById('chat-messages');
-        const recipientSelect = document.getElementById('recipient');
-        const sendPersonalBtn = document.getElementById('send-personal-btn');
-        const sendBroadcastBtn = document.getElementById('send-broadcast-btn');
+        const sendMessageBtn = document.getElementById('send-message');
+        const messageInputArea = document.getElementById('message-input-area');
+
+        let selectedRecipient = null;
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -55,59 +103,64 @@
 
         socket.onmessage = (event) => {
             const messageData = event.data;
+            console.log(messageData, "sdbsdjvsdb")
             
-            // Check if message is a user list
             if (messageData.startsWith('List of users:')) {
-                const userList = messageData.replace('List of users: ', '')
+                const users = messageData.replace('List of users: ', '')
                     .replace(/[\[\]']/g, '')
                     .split(', ')
-                    .filter(user => user !== clientId);
-                
-                // Update recipient dropdown
-                recipientSelect.innerHTML = userList
-                    .map(user => `<option value="${user}">${user}</option>`)
-                    .join('');
+                    .filter(user => user !== currentUserId);
+
+                usersList.innerHTML = users.map(user => `
+                    <div 
+                        class="user-item flex items-center p-3 hover:bg-gray-100 cursor-pointer rounded-lg transition"
+                        data-userid="${user}"
+                    >
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white mr-3">
+                            ${user.charAt(0).toUpperCase()}
+                        </div>
+                        <span class="font-medium text-gray-700">${user}</span>
+                    </div>
+                `).join('');
+
+                onlineCount.textContent = users.length;
+
+                // Add click event to each user
+                document.querySelectorAll('.user-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        selectedRecipient = item.dataset.userid;
+                        chatTitle.textContent = `Chat with ${selectedRecipient}`;
+                        messageInputArea.style.display = 'flex';
+                    });
+                });
             } else {
-                // Display received message
                 const messageElement = document.createElement('div');
+                messageElement.classList.add('p-3', 'bg-white', 'rounded-lg', 'shadow-sm');
                 messageElement.textContent = messageData;
-                chatMessages.appendChild(messageElement);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                messagesContainer.appendChild(messageElement);
+                
+                // Auto scroll to bottom
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         };
 
-        sendPersonalBtn.addEventListener('click', () => {
-            const recipient = recipientSelect.value;
-            const message = messageInput.value;
+        sendMessageBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
 
-            if (recipient && message) {
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && selectedRecipient) {
                 socket.send(JSON.stringify({
                     type: 'personal_message',
-                    sender: clientId,
-                    recipient: recipient,
+                    // sender: currentUserId,
+                    recipient: selectedRecipient,
                     message: message
                 }));
                 messageInput.value = '';
             }
-        });
-
-        sendBroadcastBtn.addEventListener('click', () => {
-            const message = messageInput.value;
-
-            if (message) {
-                socket.send(JSON.stringify({
-                    type: 'broadcast',
-                    sender: clientId,
-                    message: message
-                }));
-                messageInput.value = '';
-            }
-        });
-
-        // Log connection status
-        socket.onclose = () => {
-            console.log('WebSocket connection closed');
-        };
+        }
     </script>
 </body>
 </html>

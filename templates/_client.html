@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #chat-messages {
+            height: 300px;
+            border: 1px solid #ccc;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            padding: 10px;
+        }
+        #user-list {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <h2>WebSocket Chat</h2>
+        
+        <div id="user-list">
+            <label for="recipient">Select Recipient:</label>
+            <select id="recipient">
+                <!-- <option value="xx">xxxx</option> -->
+            </select>
+        </div>
+
+        <div id="chat-messages"></div>
+
+        <input type="text" id="message-input" placeholder="Type your message">
+        <button id="send-personal-btn">Send Personal Message</button>
+        <button id="send-broadcast-btn">Send Broadcast</button>
+    </div>
+
+    <script>
+        const clientId = `user_${Math.random().toString(36).substr(2, 9)}`;
+        const socket = new WebSocket(`ws://localhost:8000/ws`);
+        const messageInput = document.getElementById('message-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const recipientSelect = document.getElementById('recipient');
+        const sendPersonalBtn = document.getElementById('send-personal-btn');
+        const sendBroadcastBtn = document.getElementById('send-broadcast-btn');
+
+        socket.onopen = () => {
+            console.log('WebSocket connection established');
+        };
+
+        socket.onmessage = (event) => {
+            const messageData = event.data;
+            
+            // Check if message is a user list
+            if (messageData.startsWith('List of users:')) {
+                const userList = messageData.replace('List of users: ', '')
+                    .replace(/[\[\]']/g, '')
+                    .split(', ')
+                    .filter(user => user !== clientId);
+                
+                // Update recipient dropdown
+                recipientSelect.innerHTML = userList
+                    .map(user => `<option value="${user}">${user}</option>`)
+                    .join('');
+            } else {
+                // Display received message
+                const messageElement = document.createElement('div');
+                messageElement.textContent = messageData;
+                chatMessages.appendChild(messageElement);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        };
+
+        sendPersonalBtn.addEventListener('click', () => {
+            const recipient = recipientSelect.value;
+            const message = messageInput.value;
+
+            if (recipient && message) {
+                socket.send(JSON.stringify({
+                    type: 'personal_message',
+                    sender: clientId,
+                    recipient: recipient,
+                    message: message
+                }));
+                messageInput.value = '';
+            }
+        });
+
+        sendBroadcastBtn.addEventListener('click', () => {
+            const message = messageInput.value;
+
+            if (message) {
+                socket.send(JSON.stringify({
+                    type: 'broadcast',
+                    sender: clientId,
+                    message: message
+                }));
+                messageInput.value = '';
+            }
+        });
+
+        // Log connection status
+        socket.onclose = () => {
+            console.log('WebSocket connection closed');
+        };
+    </script>
+</body>
+</html>
